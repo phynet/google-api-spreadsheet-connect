@@ -1,4 +1,4 @@
-# Connect to Google API for Google Sheets
+# How to use Google API to connect with Google Sheets
 Imagine that you want to retrieve information from a goole sheet, in order to process any work in a terminal, CI, etc. The job is easy, but at the same time Google docs are messy. I've followed these steps. As always for future me, which will forget how to do it, just read this.
 
 ## Go to Google Cloud Platform
