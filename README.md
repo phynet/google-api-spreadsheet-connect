@@ -112,3 +112,89 @@ If you run this script (which uses the sheet I've pasted bellow) you will see so
 
 ## Some Test Sheet
 https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/edit
+
+
+# Integrate it to Bitrise
+
+What I wanted to do was to select a single value from the sheet and set this value as an ENV in bitrise. The value was the nick of someone in slack and the idea was that for a release workflow I should pick the owner of the release through the sheet and send it as a message to slack.
+
+Something like: "The release has started and the owner is 'sofia.swidarowicz' "
+
+## How?
+
+It's a simple step, although I needed a couple of hours to figure out the correct way of apps to use.
+
+1.- Go to your workflow and use `Generic File Storage`, add `Ruby Script` and `Slack message`
+
+<img width="371" alt="image" src="https://user-images.githubusercontent.com/724536/172587797-a869207c-46e3-4823-ad23-aadca372b496.png">
+
+2.- You will need to upload the `credentials.json` file that I mentioned before and upload it to the Code Signing tab. Add it as a GENERIC FILE STORAGE.
+
+<img width="336" alt="image" src="https://user-images.githubusercontent.com/724536/172589084-c1f493fb-6868-471e-9829-d6b7fc60deee.png">
+
+3.- Modify the Ruby Script. You will need to import several gems
+
+``` 
+gem 'googleauth'
+gem 'google-cloud-storage' (this is optional)
+gem 'google-apis-sheets_v4'
+```
+
+This is the Ruby script, I've modified some value for privacy:
+
+Note: read here how to refer the ENV for the generic file storage: https://www.bitrise.io/integrations/steps/generic-file-storage 
+
+
+```
+require "google/apis/sheets_v4"
+require "googleauth"
+
+puts "Starting..."
+puts "$GENERIC_FILE_STORAGE #{ENV['GENERIC_FILE_STORAGE']}"
+
+CREDENTIALS_PATH = "#{ENV['GENERIC_FILE_STORAGE']}/credentials.json"
+
+
+SCOPE = ::Google::Apis::SheetsV4::AUTH_SPREADSHEETS_READONLY
+
+# Author & Authen with Google by Google Service Account Credentials
+authorizer = Google::Auth::ServiceAccountCredentials.make_creds(
+  json_key_io: File.open(CREDENTIALS_PATH),
+  scope: SCOPE)
+
+authorizer.fetch_access_token!
+
+# Initialize the API
+service = Google::Apis::SheetsV4::SheetsService.new
+service.authorization = authorizer
+
+# Example Spread sheet
+# https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/edit
+spreadsheet_id = "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms"
+
+range = "F11"
+response = service.get_spreadsheet_values spreadsheet_id, range
+puts "Next Release Master Facilitator:"
+puts "No data found." if response.values.empty?
+response.values.each do |row|
+  # Print column which correspond to indices 0
+  RELEASE_MASTER = row[0]
+  puts "Next Release Master: #{RELEASE_MASTER}"
+
+  system( "envman add --key RELEASE_MASTER_NAME --value '@#{RELEASE_MASTER}'" )
+
+end
+```
+
+- **RELEASE_MASTER_NAME** is the ENV VAR that is used in the flow in the `Env Var section`
+- In order to override the ENVAR with a new value, we need to use envman https://github.com/bitrise-io/envman/ using this code:
+
+     `system( "envman add --key RELEASE_MASTER_NAME --value '@#{RELEASE_MASTER}'" )`
+
+4.- Use the ENV VAR an add it to the message of slack 
+
+     `My message with the name of the owner: $RELEASE_MASTER_NAME`
+
+
+And that's it :D
+
